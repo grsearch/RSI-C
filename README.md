@@ -12,7 +12,7 @@ Solana 新代币 RSI(7)+EMA99+量能 策略监控机器人。
 
 | # | 条件 | 说明 |
 |---|------|------|
-| 1 | RSI(7) < 30 | 当前处于超卖区间 |
+| 1 | RSI(7) < 35 | 当前处于超卖区间 |
 | 2 | 价格 < EMA(99) | 处在长期均线下方（避免追高） |
 | 3 | K 线数 ≥ 21 | RSI Wilder 收敛门槛 |
 | 4 | 过去 5 分钟内 buyVol ≥ 1.2 × sellVol | 链上资金净流入 |
@@ -30,6 +30,7 @@ Solana 新代币 RSI(7)+EMA99+量能 策略监控机器人。
 | 4 | 上涨 ≥ +30% 后回撤 -20% | 移动止损 | ✅ 启用 |
 | 5 | 跌幅 ≤ -20% | 固定止损 | ❌ **关闭**（避免假跌震出） |
 | 6 | 量能萎缩 | 量能出场 | ❌ **关闭** |
+| 7 | 持仓 ≥ 6 小时 | 超时卖出 (TIMEOUT_EXIT) | ✅ 启用 |
 
 > **持仓中** 即使 FDV 跌破 $30K 或 LP 跌破 $10K，也**不强制卖出**，等正常出场条件触发。
 > 仅在 **无持仓** 时，FDV/LP 跌破阈值会从监控列表中移除该代币。
@@ -123,10 +124,11 @@ http://YOUR_SERVER:3001/diag
 | `RSI_PERIOD` | `7` | RSI 周期 |
 | `EMA_PERIOD` | `99` | EMA 长期均线周期 |
 | `EMA_INSUFFICIENT_MODE` | `strict` | K 线不足 99 根时严格不出信号 |
-| `RSI_BUY_LEVEL` | `30` | 超卖买入阈值 |
+| `RSI_BUY_LEVEL` | `35` | 超卖买入阈值 |
 | `RSI_SELL_LEVEL` | `70` | RSI 下穿此值卖出 |
 | `RSI_PANIC_LEVEL` | `80` | RSI 超过此值立即卖出 |
 | `MIN_CANDLES_FOR_SIGNAL` | `21` | RSI 收敛所需最低 K 线数 |
+| `SKIP_FIRST_CANDLES` | `3` | 跳过前 N 根 K 线（实际生效值取 max(此值, 21)） |
 
 ### 仓位与冷却
 
@@ -134,6 +136,7 @@ http://YOUR_SERVER:3001/diag
 |------|--------|------|
 | `TRADE_SIZE_SOL` | `1` | 每笔买入金额（SOL，**不是 0.2**） |
 | `SELL_COOLDOWN_SEC` | `1800` | 卖出后冷却（秒，**30分钟**） |
+| `MAX_HOLD_SEC` | `21600` | 最大持仓时间（秒，**6小时**），超时强制卖出 reason=TIMEOUT_EXIT, 0=关闭 |
 
 ### 止盈止损
 
@@ -153,7 +156,7 @@ http://YOUR_SERVER:3001/diag
 |------|--------|------|
 | `VOL_ENABLED` | `true` | 启用量能买入过滤 |
 | `VOL_BUY_MULT` | `1.2` | buyVol ≥ N × sellVol 才买入 |
-| `VOL_MIN_TOTAL` | `15` | 最低总成交量(SOL) |
+| `VOL_MIN_TOTAL` | `5` | 最低总成交量(SOL) |
 | `VOL_WINDOW_SEC` | `300` | 量能统计窗口（秒） |
 | `VOL_DECAY_EXIT_ENABLED` | `false` | **默认关闭**量能萎缩出场 |
 
@@ -287,6 +290,7 @@ curl http://localhost:3001/diag | jq .
 - **V5-18**: X mentions 列
 - **V5-19**: X mentions 改串行 + 15s 间隔
 - **V5-20**: 加 /diag 诊断接口
+- **V5-21**: dashboard 加回 Age 列(代币年龄); 加最大持仓 6h 超时卖出 (TIMEOUT_EXIT)
 
 ---
 

@@ -35,6 +35,9 @@ const KLINE_SEC         = parseInt(process.env.KLINE_INTERVAL_SEC    || '300', 1
 const DRY_RUN           = (process.env.DRY_RUN || 'false') === 'true';
 const TRADE_SOL         = parseFloat(process.env.TRADE_SIZE_SOL      || '1');
 const SELL_COOLDOWN_SEC = parseInt(process.env.SELL_COOLDOWN_SEC     || '1800', 10); // 默认30分钟
+// ★ V5-21: 最大持仓时间 - 防止僵持币长期占用资金
+//   持仓超过 N 秒强制卖出, 0 = 关闭. 默认 21600 = 6 小时
+const MAX_HOLD_SEC      = parseInt(process.env.MAX_HOLD_SEC          || '21600', 10);
 const SL_POLL_SEC       = parseInt(process.env.SL_POLL_SEC           || '60', 10);
 const MAX_TOKENS        = parseInt(process.env.MAX_MONITOR_TOKENS    || '95', 10);  // ★ V5: 最大监控数
 const OVERVIEW_PATROL_SEC = parseInt(process.env.OVERVIEW_PATROL_SEC || '7200', 10); // ★ V5: FDV/LP巡检间隔(秒)
@@ -701,6 +704,25 @@ class TokenMonitor extends EventEmitter {
 
         state._lastPriceUsd = price;
         state._lastPriceTs = Date.now();
+
+        // ★ V5-21: 最大持仓时间检查 (在所有其他卖出逻辑之前)
+        //   防止僵持币(RSI 一直在 30-70 之间徘徊)长期占用资金
+        if (MAX_HOLD_SEC > 0 && state.position?.buyTime) {
+          const heldSec = Math.round((Date.now() - state.position.buyTime) / 1000);
+          if (heldSec >= MAX_HOLD_SEC) {
+            const heldH = (heldSec / 3600).toFixed(1);
+            const reason = `TIMEOUT_EXIT(${heldH}h>=${(MAX_HOLD_SEC/3600).toFixed(0)}h)`;
+            logger.info('[Monitor] ⏰ 超时卖出 %s @ %.8f | %s | 持仓%ds',
+              state.symbol, price, reason, heldSec);
+            this._stopLossLocks.add(address);
+            this._doSell(state, reason).catch(err => {
+              logger.error('[Monitor] 超时卖出失败 %s: %s', state.symbol, err.message);
+            }).finally(() => {
+              this._stopLossLocks.delete(address);
+            });
+            continue;
+          }
+        }
 
         // ── 1. 止损/移动止损检查 ──────────────────────────────
         const sl = checkStopLoss(price, state);

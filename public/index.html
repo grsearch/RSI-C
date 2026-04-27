@@ -92,7 +92,7 @@
     </div>
     <table id="tbl-tokens">
       <thead><tr>
-        <th>代币</th><th>合约</th><th>价格</th><th title="X (Twitter) 过去24小时提及数, 每2小时刷新">X提及</th><th>FDV</th><th>LP</th>
+        <th>代币</th><th>合约</th><th>价格</th><th title="X (Twitter) 过去24小时提及数, 每2小时刷新">X提及</th><th>FDV</th><th>LP</th><th title="代币年龄: 从首次交易/创建至今">Age</th>
         <th>RSI</th><th>prevRSI</th><th>Buy/Sell</th><th>信号</th><th>原因</th>
         <th>K线</th><th>交易</th><th>状态</th><th>操作</th>
       </tr></thead>
@@ -432,10 +432,13 @@ function _updateTickCells(tr, d) {
   }
   cells[4].textContent = fmtFdv(d.fdv); cells[4].className = 'fdv-val';
   cells[5].textContent = fmtFdv(d.lp);  cells[5].className = 'lp-val';
-  cells[6].textContent = rsi == null ? '预热' : rsi.toFixed(2);
-  cells[6].className = rsiClass(rsi);
-  cells[7].textContent = d.prevRsi == null ? '-' : d.prevRsi.toFixed(2);
-  cells[7].className = rsiClass(d.prevRsi);
+  // ★ V5-21: Age 列 - 代币年龄 (从 Birdeye createdAt 算)
+  cells[6].textContent = fmtAge(d.createdAt);
+  cells[6].style.cssText = 'color:#8b949e;font-size:11px';
+  cells[7].textContent = rsi == null ? '预热' : rsi.toFixed(2);
+  cells[7].className = rsiClass(rsi);
+  cells[8].textContent = d.prevRsi == null ? '-' : d.prevRsi.toFixed(2);
+  cells[8].className = rsiClass(d.prevRsi);
   // ★ V5-14: RSI 列 tooltip —— 决策追踪，看这次评估的完整上下文
   const st = d.signalTrace;
   if (st) {
@@ -454,37 +457,37 @@ function _updateTickCells(tr, d) {
       `  _lastSellCandle: ${st.lastSellCandle}\n` +
       `  inPosition: ${st.inPosition}   selling: ${st.selling}   cooldown: ${st.cooldownSec}s\n` +
       `\n最近5根K线收盘价(对比 GMGN 判断数据源是否一致):\n  ${(st.recentCloses||[]).join(' → ')}`;
-    cells[6].title = tip;
     cells[7].title = tip;
-    cells[6].style.cursor = 'help';
+    cells[8].title = tip;
     cells[7].style.cursor = 'help';
+    cells[8].style.cursor = 'help';
   } else {
-    cells[6].title = '';
     cells[7].title = '';
+    cells[8].title = '';
   }
-  cells[8].textContent = bsStr;
-  cells[8].className = volClass(bv, sv);
+  cells[9].textContent = bsStr;
+  cells[9].className = volClass(bv, sv);
   // ★ 诊断 tooltip：看这个币到底从 Helius 收到多少笔链上交易
   const cs = d.chainStats;
   if (cs) {
     const ago = cs.lastRxTs ? Math.floor((Date.now() - cs.lastRxTs) / 1000) + 's前' : '从未';
-    cells[8].title = `Buy/Sell SOL (${d.volume?.windowSec||30}s)\nHelius收到: ${cs.chainRx} 笔 / 解析成功: ${cs.chainParsed} 笔\n最后一笔: ${ago}\nsubId: ${cs.subId ?? '(pump全局)'}`;
+    cells[9].title = `Buy/Sell SOL (${d.volume?.windowSec||30}s)\nHelius收到: ${cs.chainRx} 笔 / 解析成功: ${cs.chainParsed} 笔\n最后一笔: ${ago}\nsubId: ${cs.subId ?? '(pump全局)'}`;
   } else {
-    cells[8].title = `Buy/Sell SOL (${d.volume?.windowSec||30}s)`;
+    cells[9].title = `Buy/Sell SOL (${d.volume?.windowSec||30}s)`;
   }
-  cells[9].textContent = sig;
-  cells[9].className = sig.toLowerCase();
-  cells[10].textContent = d.reason || '';
-  cells[10].style.cssText = 'color:#8b949e;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-  cells[10].title = d.reason || '';
-  cells[11].textContent = d.closedCount ?? '-';
+  cells[10].textContent = sig;
+  cells[10].className = sig.toLowerCase();
+  cells[11].textContent = d.reason || '';
+  cells[11].style.cssText = 'color:#8b949e;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  cells[11].title = d.reason || '';
+  cells[12].textContent = d.closedCount ?? '-';
   // ★ K线诊断 tooltip：看历史/实时分别多少、Birdeye 到底返回了什么
   const cst = d.candleStats;
   if (cst) {
     const hm = cst.histMeta || {};
     const ago = hm.fetchedAt ? Math.floor((Date.now() - hm.fetchedAt) / 1000) + 's前' : '未拉取';
     const needRefetch = cst.histCount === 0 && hm.error && hm.error !== 'NO_DATA';
-    cells[11].title =
+    cells[12].title =
       `K线数量构成:\n` +
       `- 历史(Birdeye): ${cst.histCount}\n` +
       `- 实时(本进程聚合): ${cst.liveCount}\n` +
@@ -498,15 +501,15 @@ function _updateTickCells(tr, d) {
       `- 拉取时间: ${ago}` +
       (needRefetch ? '\n\n★ 双击此格子可手动重拉历史K线' : '');
     if (needRefetch) {
-      cells[11].style.cssText = 'cursor:pointer;color:#f0883e;font-weight:bold';
-      cells[11].ondblclick = async () => {
-        cells[11].textContent = '...';
+      cells[12].style.cssText = 'cursor:pointer;color:#f0883e;font-weight:bold';
+      cells[12].ondblclick = async () => {
+        cells[12].textContent = '...';
         try {
           const r = await fetch(`/api/tokens/${d.address}/refetch-history`, { method: 'POST' });
           const j = await r.json();
           if (j.ok) {
-            cells[11].textContent = '已入队';
-            cells[11].title = `已加入重拉队列 (队列长度: ${j.queueSize})，等待数据返回...`;
+            cells[12].textContent = '已入队';
+            cells[12].title = `已加入重拉队列 (队列长度: ${j.queueSize})，等待数据返回...`;
           } else {
             cells[11].textContent = d.closedCount ?? '-';
           }
