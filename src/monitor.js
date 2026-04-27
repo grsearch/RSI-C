@@ -362,6 +362,14 @@ class TokenMonitor extends EventEmitter {
         }
       } catch (_) {}
 
+      // ★ V5-24: overview 没拿到 createdAt → 走专门接口 token_creation_info
+      //   永久缓存到 data/tokenCreation.json, 每个币只拉一次
+      if (!s.createdAt) {
+        try {
+          const ts = await birdeye.getCreationInfo(address);
+          if (ts) s.createdAt = ts;
+        } catch (_) {}
+      }
       // 2. 拉取历史K线（走队列，串行 + 429重试，避免 Birdeye 限流）
       histFetchQueue.enqueue(address, symbol, (histCandles) => {
         const s2 = this._tokens.get(address);
@@ -1322,6 +1330,14 @@ class TokenMonitor extends EventEmitter {
         if (overview.fdv !== null && Number.isFinite(overview.fdv)) state.fdv = overview.fdv;
         if (overview.liquidity !== null && Number.isFinite(overview.liquidity)) state.lp = overview.liquidity;
         if (overview.createdAt) state.createdAt = overview.createdAt; // ★ 始终更新，确保Age数据存在
+
+        // ★ V5-24: overview 没给 createdAt → 走专门接口兜底 (永久缓存, 已拉过的不会重复请求)
+        if (!state.createdAt) {
+          try {
+            const ts = await birdeye.getCreationInfo(address);
+            if (ts) state.createdAt = ts;
+          } catch (_) {}
+        }
 
         // ★ FDV 退出检查（V5-16: 持仓中不退出）
         if (state.fdv !== null && Number.isFinite(state.fdv) && state.fdv < FDV_EXIT && !state.inPosition) {

@@ -12,6 +12,8 @@
 
 const WebSocket = require('ws');
 const fetch     = require('node-fetch');
+const fs        = require('fs');
+const path      = require('path');
 const logger    = require('./logger');
 
 const BIRDEYE_KEY  = process.env.BIRDEYE_API_KEY || '';
@@ -401,6 +403,90 @@ function getOhlcvCacheStats() {
   return stats;
 }
 
+// ★ V5-24: 代币创建时间获取与持久化
+//   走 Birdeye /defi/token_creation_info 专门接口
+//   blockUnixTime 永远不变, 持久化到磁盘, 程序重启不丢
+//   每个币只查一次, 不重复请求
+const _creationCache = new Map(); // address → blockUnixTime (秒)
+const CREATION_DATA_DIR  = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const CREATION_CACHE_FILE = path.join(CREATION_DATA_DIR, 'tokenCreation.json');
+let _creationLoaded = false;
+const _creationInflight = new Map(); // 防同时多次拉取同一个币
+
+function _loadCreationCache() {
+  if (_creationLoaded) return;
+  _creationLoaded = true;
+  try {
+    if (fs.existsSync(CREATION_CACHE_FILE)) {
+      const obj = JSON.parse(fs.readFileSync(CREATION_CACHE_FILE, 'utf-8'));
+      for (const [addr, ts] of Object.entries(obj)) _creationCache.set(addr, ts);
+      logger.info('[Birdeye] 加载代币创建时间缓存 %d 条', _creationCache.size);
+    }
+  } catch (err) {
+    logger.warn('[Birdeye] 加载 tokenCreation.json 失败: %s', err.message);
+  }
+}
+
+function _saveCreationCache() {
+  try {
+    if (!fs.existsSync(CREATION_DATA_DIR)) fs.mkdirSync(CREATION_DATA_DIR, { recursive: true });
+    const obj = {};
+    for (const [addr, ts] of _creationCache.entries()) obj[addr] = ts;
+    fs.writeFileSync(CREATION_CACHE_FILE, JSON.stringify(obj), 'utf-8');
+  } catch (err) {
+    logger.warn('[Birdeye] 持久化 tokenCreation.json 失败: %s', err.message);
+  }
+}
+
+/**
+ * 获取代币创建时间(毫秒)。永久缓存, 第一次调用拉 HTTP, 之后命中内存/磁盘
+ * @returns {Promise<number|null>} 创建时间(毫秒), null=拉取失败
+ */
+async function getCreationInfo(address) {
+  _loadCreationCache();
+  // 命中内存
+  if (_creationCache.has(address)) {
+    return _creationCache.get(address) * 1000;
+  }
+  // 同一个币正在拉取, 共享 Promise
+  if (_creationInflight.has(address)) {
+    return _creationInflight.get(address);
+  }
+  const promise = (async () => {
+    try {
+      const url = `${BASE}/defi/token_creation_info?address=${address}`;
+      const res = await fetch(url, {
+        headers: { 'X-API-KEY': BIRDEYE_KEY, 'x-chain': 'solana' },
+      });
+      if (!res.ok) {
+        logger.warn('[Birdeye] getCreationInfo %s HTTP %d', address.slice(0, 8), res.status);
+        return null;
+      }
+      const json = await res.json();
+      const data = json?.data;
+      // 文档没明确字段名, 兼容多种可能
+      const blockUnixTime = data?.blockUnixTime ?? data?.blockTime ?? data?.createdAt ?? null;
+      if (typeof blockUnixTime !== 'number' || blockUnixTime <= 0) {
+        logger.warn('[Birdeye] getCreationInfo %s 返回无 blockUnixTime: %s',
+          address.slice(0, 8), JSON.stringify(data || {}).slice(0, 120));
+        return null;
+      }
+      _creationCache.set(address, blockUnixTime);
+      _saveCreationCache();
+      logger.debug('[Birdeye] getCreationInfo %s -> %s',
+        address.slice(0, 8), new Date(blockUnixTime * 1000).toISOString());
+      return blockUnixTime * 1000;
+    } catch (err) {
+      logger.warn('[Birdeye] getCreationInfo %s 失败: %s', address.slice(0, 8), err.message);
+      return null;
+    } finally {
+      _creationInflight.delete(address);
+    }
+  })();
+  _creationInflight.set(address, promise);
+  return promise;
+}
+
 async function getLiquidity(address) {
   const entry = await _fetchOverview(address);
   return entry?.liquidity ?? null;
@@ -536,4 +622,4 @@ async function getOHLCV(address, intervalSec, bars = 150) {
   }
 }
 
-module.exports = { getPrice, getPriceFailStatus, getFdv, getCachedFdv, getFdvFresh, getLiquidity, getV24hUSD, getOverview, getSymbol, getRecentOHLCV, getOhlcvCacheStats, clearCache, priceStream, getOHLCV };
+module.exports = { getPrice, getPriceFailStatus, getFdv, getCachedFdv, getFdvFresh, getLiquidity, getV24hUSD, getOverview, getSymbol, getRecentOHLCV, getOhlcvCacheStats, getCreationInfo, clearCache, priceStream, getOHLCV };

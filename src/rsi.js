@@ -528,6 +528,10 @@ module.exports = {
   checkBuyVolume,
   checkVolumeDecay,
   checkStopLoss,
+  // ★ V5-22: 顶层导出 TRAILING_STOP_*, 修复 monitor.js 解构得到 undefined 的 bug
+  //   原本只在 CONFIG 里, 导致启动日志显示 "激活线=+undefined% 移动止损=关闭"
+  //   实际业务逻辑用 rsi.js 内部常量, 行为不受影响; 但日志会误导排查
+  TRAILING_STOP_ENABLED, TRAILING_STOP_ACTIVATE, TRAILING_STOP_PCT,
   CONFIG: {
     RSI_PERIOD, RSI_BUY, RSI_SELL, RSI_PANIC,
     VOL_ENABLED, VOL_BUY_MULT, VOL_SELL_MULT, VOL_MIN_TOTAL, VOL_WINDOW_SEC,

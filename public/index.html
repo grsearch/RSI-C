@@ -511,25 +511,25 @@ function _updateTickCells(tr, d) {
             cells[12].textContent = '已入队';
             cells[12].title = `已加入重拉队列 (队列长度: ${j.queueSize})，等待数据返回...`;
           } else {
-            cells[11].textContent = d.closedCount ?? '-';
+            cells[12].textContent = d.closedCount ?? '-';
           }
         } catch (err) {
-          cells[11].textContent = d.closedCount ?? '-';
+          cells[12].textContent = d.closedCount ?? '-';
           alert('重拉失败: ' + err.message);
         }
       };
     } else {
-      cells[11].style.cssText = '';
-      cells[11].ondblclick = null;
+      cells[12].style.cssText = '';
+      cells[12].ondblclick = null;
     }
   } else {
-    cells[11].title = '';
+    cells[12].title = '';
   }
-  cells[12].textContent = (d.tradeCount || 0) + '笔';
-  cells[12].style.fontSize = '11px';
-  cells[13].innerHTML = posStr;
-  if (!cells[14].firstChild) {
-    cells[14].innerHTML = `<button onclick="deleteToken('${d.address}')" style="background:#4d1c1c;border:1px solid #f85149;color:#f85149;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px" title="移除监控">✕</button>`;
+  cells[13].textContent = (d.tradeCount || 0) + '笔';
+  cells[13].style.fontSize = '11px';
+  cells[14].innerHTML = posStr;
+  if (!cells[15].firstChild) {
+    cells[15].innerHTML = `<button onclick="deleteToken('${d.address}')" style="background:#4d1c1c;border:1px solid #f85149;color:#f85149;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px" title="移除监控">✕</button>`;
   }
 }
 
