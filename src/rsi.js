@@ -25,11 +25,11 @@ const VOL_BUY_MULT        = parseFloat(process.env.VOL_BUY_MULT          || '1.2
 const VOL_SELL_MULT       = parseFloat(process.env.VOL_SELL_MULT         || '999'); // sellVol >= N × buyVol 触发卖出（默认999=禁用）
 const VOL_MIN_TOTAL       = parseFloat(process.env.VOL_MIN_TOTAL         || '5');  // 最低总成交量(SOL) // buyVol >= N × sellVol 才买入
 const VOL_WINDOW_SEC      = parseInt(process.env.VOL_WINDOW_SEC       || '300', 10);
-const VOL_EXIT_CONSECUTIVE = parseInt(process.env.VOL_EXIT_CONSECUTIVE || '2', 10);
-const VOL_EXIT_RATIO      = parseFloat(process.env.VOL_EXIT_RATIO     || '1.0');
+const VOL_EXIT_CONSECUTIVE = parseInt(process.env.VOL_EXIT_CONSECUTIVE || '3', 10);
+const VOL_EXIT_RATIO      = parseFloat(process.env.VOL_EXIT_RATIO     || '0.3');
 const VOL_EXIT_LOOKBACK   = parseInt(process.env.VOL_EXIT_LOOKBACK    || '4', 10);
 // ★ 量能萎缩出场总开关（默认 false，彻底关闭此出场逻辑）
-const VOL_DECAY_EXIT_ENABLED = (process.env.VOL_DECAY_EXIT_ENABLED || 'false') === 'true';
+const VOL_DECAY_EXIT_ENABLED = (process.env.VOL_DECAY_EXIT_ENABLED || 'true') === 'true';
 const SKIP_FIRST_CANDLES  = parseInt(process.env.SKIP_FIRST_CANDLES   || '3', 10);
 
 // 止盈止损
@@ -38,7 +38,7 @@ const TAKE_PROFIT_PCT = parseFloat(process.env.TAKE_PROFIT_PCT || '100');
 const TAKE_PROFIT_ENABLED = (process.env.TAKE_PROFIT_ENABLED || 'true') === 'true';
 const STOP_LOSS_PCT   = parseFloat(process.env.STOP_LOSS_PCT   || '-20');
 // ★ 固定止损总开关（默认 false，只靠移动止损/RSI 出场；注意这会使最大回撤不可控）
-const STOP_LOSS_ENABLED = (process.env.STOP_LOSS_ENABLED || 'false') === 'true';
+const STOP_LOSS_ENABLED = (process.env.STOP_LOSS_ENABLED || 'true') === 'true';
 
 // 移动止损（Trailing Stop）
 const TRAILING_STOP_ENABLED  = (process.env.TRAILING_STOP_ENABLED  || 'true') === 'true';

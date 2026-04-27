@@ -28,8 +28,8 @@ Solana 新代币 RSI(7)+EMA99+量能 策略监控机器人。
 | 2 | RSI(7) 下穿 70 | 全仓卖出 | ✅ 启用 |
 | 3 | 涨幅 ≥ +100% | 固定止盈 | ✅ 启用 |
 | 4 | 上涨 ≥ +30% 后回撤 -20% | 移动止损 | ✅ 启用 |
-| 5 | 跌幅 ≤ -20% | 固定止损 | ❌ **关闭**（避免假跌震出） |
-| 6 | 量能萎缩 | 量能出场 | ❌ **关闭** |
+| 5 | 跌幅 ≤ -20% | 固定止损 | ✅ V5-26 启用 |
+| 6 | 量能萎缩(最近3根均量 < 前4根均量×0.3) | 量能出场 | ✅ V5-26 启用 |
 | 7 | 持仓 ≥ 6 小时 | 超时卖出 (TIMEOUT_EXIT) | ✅ 启用 |
 
 > **持仓中** 即使 FDV 跌破 $30K 或 LP 跌破 $10K，也**不强制卖出**，等正常出场条件触发。
@@ -144,8 +144,8 @@ http://YOUR_SERVER:3001/diag
 |------|--------|------|
 | `TAKE_PROFIT_ENABLED` | `true` | 启用固定止盈 |
 | `TAKE_PROFIT_PCT` | `100` | 止盈百分比（**+100%**，不是 +50%） |
-| `STOP_LOSS_ENABLED` | `false` | **默认关闭**固定止损 |
-| `STOP_LOSS_PCT` | `-20` | 止损百分比（仅当启用时生效） |
+| `STOP_LOSS_ENABLED` | `true` | **V5-26 启用**固定止损 |
+| `STOP_LOSS_PCT` | `-20` | 止损百分比 |
 | `TRAILING_STOP_ENABLED` | `true` | 启用移动止损 |
 | `TRAILING_STOP_ACTIVATE` | `30` | 上涨 30% 后激活移动止损 |
 | `TRAILING_STOP_PCT` | `-20` | 从峰值回撤 20% 触发卖出 |
@@ -158,7 +158,10 @@ http://YOUR_SERVER:3001/diag
 | `VOL_BUY_MULT` | `1.2` | buyVol ≥ N × sellVol 才买入 |
 | `VOL_MIN_TOTAL` | `5` | 最低总成交量(SOL) |
 | `VOL_WINDOW_SEC` | `300` | 量能统计窗口（秒） |
-| `VOL_DECAY_EXIT_ENABLED` | `false` | **默认关闭**量能萎缩出场 |
+| `VOL_DECAY_EXIT_ENABLED` | `true` | **V5-26 启用**量能萎缩出场 |
+| `VOL_EXIT_CONSECUTIVE` | `3` | 最近 N 根 K 线连续低量则出场 |
+| `VOL_EXIT_LOOKBACK` | `4` | 对比前 N 根的均量 |
+| `VOL_EXIT_RATIO` | `0.3` | 最近均量 < 前 N 根均量 × 0.3 视为萎缩(严重才触发) |
 
 ### FDV / LP 过滤
 
@@ -180,7 +183,7 @@ http://YOUR_SERVER:3001/diag
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `OHLCV_REALTIME_ENABLED` | `true` | 启用 OHLCV 实时刷新（替代不准的 ticks 聚合） |
-| `OHLCV_REFRESH_SEC` | `30` | 每 N 秒拉一次最新 K 线 |
+| `OHLCV_REFRESH_SEC` | `300` | 每 N 秒拉一次最新 K 线（V5-25: 30→300, 大幅节省 Birdeye CU） |
 | `OHLCV_REALTIME_BARS` | `120` | 实时刷新拉的 K 线根数 |
 
 ### prevRsi 时效保护（V5-15/V5-17）
@@ -291,6 +294,11 @@ curl http://localhost:3001/diag | jq .
 - **V5-19**: X mentions 改串行 + 15s 间隔
 - **V5-20**: 加 /diag 诊断接口
 - **V5-21**: dashboard 加回 Age 列(代币年龄); 加最大持仓 6h 超时卖出 (TIMEOUT_EXIT)
+- **V5-22**: 修 monitor.js 启动日志 "移动止损=关闭 激活线=+undefined%" (rsi.js 顶层补导出 TRAILING_STOP_*)
+- **V5-23**: 修前端 K线列被覆盖成 "0笔" bug (V5-21 索引偏移没改干净)
+- **V5-24**: dashboard 表格创建 td 数量从 15 改 16, 修整张表空白; 加 birdeye.getCreationInfo 和持久化
+- **V5-25**: ★ OHLCV 刷新从 30s 改 300s, 节省 90% Birdeye CU. 实时价由 Birdeye WS SUBSCRIBE_PRICE 提供, 业务行为不变
+- **V5-26**: 重新启用固定止损 -20% 和量能萎缩出场; VOL_DECAY 参数 (3根<前4根均×0.3, 严重萎缩才触发)
 
 ---
 
