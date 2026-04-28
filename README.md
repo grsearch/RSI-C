@@ -2,7 +2,7 @@
 
 Solana 新代币 RSI(7)+EMA99+量能 策略监控机器人。
 
-**15分钟K线 · Birdeye OHLCV 实时刷新 · Helius 链上成交数据 · 空跑/实盘**
+**5分钟K线 · Birdeye OHLCV 实时刷新 · Helius 链上成交数据 · 空跑/实盘**
 
 ---
 
@@ -120,7 +120,7 @@ http://YOUR_SERVER:3001/diag
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `KLINE_INTERVAL_SEC` | `900` | K线宽度（秒，**15分钟**，不是 15s） |
+| `KLINE_INTERVAL_SEC` | `300` | K线宽度（秒，**5分钟**，不是 15s） |
 | `RSI_PERIOD` | `7` | RSI 周期 |
 | `EMA_PERIOD` | `99` | EMA 长期均线周期 |
 | `EMA_INSUFFICIENT_MODE` | `strict` | K 线不足 99 根时严格不出信号 |
@@ -156,8 +156,8 @@ http://YOUR_SERVER:3001/diag
 |------|--------|------|
 | `VOL_ENABLED` | `true` | 启用量能买入过滤 |
 | `VOL_BUY_MULT` | `1.2` | buyVol ≥ N × sellVol 才买入 |
-| `VOL_MIN_TOTAL` | `10` | 最低总成交量(SOL) |
-| `VOL_WINDOW_SEC` | `900` | 量能统计窗口（秒，15分钟） |
+| `VOL_MIN_TOTAL` | `5` | 最低总成交量(SOL) |
+| `VOL_WINDOW_SEC` | `300` | 量能统计窗口（秒） |
 | `VOL_DECAY_EXIT_ENABLED` | `true` | **V5-26 启用**量能萎缩出场 |
 | `VOL_EXIT_CONSECUTIVE` | `3` | 最近 N 根 K 线连续低量则出场 |
 | `VOL_EXIT_LOOKBACK` | `4` | 对比前 N 根的均量 |
@@ -183,7 +183,7 @@ http://YOUR_SERVER:3001/diag
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `OHLCV_REALTIME_ENABLED` | `true` | 启用 OHLCV 实时刷新（替代不准的 ticks 聚合） |
-| `OHLCV_REFRESH_SEC` | `900` | 每 N 秒拉一次最新 K 线（与15分钟K线宽度对齐, 节省 Birdeye CU） |
+| `OHLCV_REFRESH_SEC` | `300` | 每 N 秒拉一次最新 K 线（V5-25: 30→300, 大幅节省 Birdeye CU） |
 | `OHLCV_REALTIME_BARS` | `120` | 实时刷新拉的 K 线根数 |
 
 ### prevRsi 时效保护（V5-15/V5-17）
@@ -299,6 +299,7 @@ curl http://localhost:3001/diag | jq .
 - **V5-24**: dashboard 表格创建 td 数量从 15 改 16, 修整张表空白; 加 birdeye.getCreationInfo 和持久化
 - **V5-25**: ★ OHLCV 刷新从 30s 改 300s, 节省 90% Birdeye CU. 实时价由 Birdeye WS SUBSCRIBE_PRICE 提供, 业务行为不变
 - **V5-26**: 重新启用固定止损 -20% 和量能萎缩出场; VOL_DECAY 参数 (3根<前4根均×0.3, 严重萎缩才触发)
+- **V5-27**: 启动日志加 CU 关键参数行; /diag 加 cuEstimate 字段 + 月度预警
 
 ---
 

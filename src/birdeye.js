@@ -39,6 +39,13 @@ class BirdeyePriceStream {
 
     // address → { price, ts, callbacks: Set<fn> }
     this._subscriptions = new Map();
+
+    // ★ V5-28: WS 推送计数, 用于诊断 WS 命中率
+    //   - _pushTotal: 程序启动后所有币的总推送次数
+    //   - _pushBuckets: 滚动桶, 60 个 1s 桶, 累计最近 60 秒推送数
+    this._pushTotal   = 0;
+    this._pushBuckets = new Array(60).fill(0); // 每个桶=1秒
+    this._lastBucketSec = Math.floor(Date.now() / 1000);
   }
 
   start() {
@@ -88,6 +95,51 @@ class BirdeyePriceStream {
   }
 
   isConnected() { return this._connected; }
+
+  // ★ V5-28: 诊断 WS 推送命中率
+  getStats() {
+    const now = Date.now();
+    const nowSec = Math.floor(now / 1000);
+    // 最近 60 秒推送数(从滚动桶累加)
+    let pushLast60s = 0;
+    for (let i = 0; i < 60; i++) {
+      // 仅算 [now-59, now] 范围内的桶
+      const bucketSec = nowSec - i;
+      if (bucketSec >= this._lastBucketSec - 59) {
+        pushLast60s += this._pushBuckets[bucketSec % 60] || 0;
+      }
+    }
+    // 各币最后推送时间分布
+    let withRecentPush_10s = 0;
+    let withRecentPush_60s = 0;
+    let withRecentPush_300s = 0;
+    let silent = 0;
+    const ageSecs = [];
+    for (const [, sub] of this._subscriptions) {
+      if (!sub.ts) { silent++; continue; }
+      const age = now - sub.ts;
+      ageSecs.push(Math.floor(age / 1000));
+      if (age <= 10000) withRecentPush_10s++;
+      if (age <= 60000) withRecentPush_60s++;
+      if (age <= 300000) withRecentPush_300s++;
+    }
+    ageSecs.sort((a, b) => a - b);
+    const median = ageSecs.length > 0 ? ageSecs[Math.floor(ageSecs.length / 2)] : null;
+    const p90    = ageSecs.length > 0 ? ageSecs[Math.floor(ageSecs.length * 0.9)] : null;
+    return {
+      connected: this._connected,
+      subscriptions: this._subscriptions.size,
+      pushTotal: this._pushTotal,
+      pushLast60s,
+      pushPerMin: pushLast60s,
+      withRecentPush_10s,
+      withRecentPush_60s,
+      withRecentPush_300s,
+      silent,
+      ageSecMedian: median,
+      ageSecP90: p90,
+    };
+  }
 
   _connect() {
     if (this._stopping) return;
@@ -164,6 +216,19 @@ class BirdeyePriceStream {
       const now = Date.now();
       sub.price = close;
       sub.ts    = now;
+
+      // ★ V5-28: 推送计数
+      this._pushTotal++;
+      const nowSec = Math.floor(now / 1000);
+      if (nowSec !== this._lastBucketSec) {
+        // 时间前进, 把中间空白桶清零
+        const gap = Math.min(60, nowSec - this._lastBucketSec);
+        for (let i = 0; i < gap; i++) {
+          this._pushBuckets[(this._lastBucketSec + 1 + i) % 60] = 0;
+        }
+        this._lastBucketSec = nowSec;
+      }
+      this._pushBuckets[nowSec % 60]++;
 
       const ohlcv = {
         open:   parseFloat(msg.data.o || close),
@@ -287,24 +352,54 @@ function getPriceFailStatus(address) {
   return { status: f.status, count: f.count, remainingMs: f.ttl - (Date.now() - f.ts) };
 }
 
+// ★ V5-28: getPrice 调用分支计数, 用于诊断 WS / HTTP 缓存命中率
+const _getPriceStats = {
+  totalCalls:       0,
+  hitWsCache:       0,
+  hitHttpCache:     0,
+  hitFailCache:     0,
+  realHttpCall:     0,
+  realHttpSuccess:  0,
+  realHttpFail:     0,
+  startTs:          Date.now(),
+};
+function getPriceStats() {
+  const elapsedSec = Math.max(1, Math.floor((Date.now() - _getPriceStats.startTs) / 1000));
+  return {
+    ..._getPriceStats,
+    elapsedSec,
+    realHttpPerMin: Math.round(_getPriceStats.realHttpCall * 60 / elapsedSec),
+    wsCacheHitRatePct: _getPriceStats.totalCalls > 0
+      ? ((_getPriceStats.hitWsCache / _getPriceStats.totalCalls) * 100).toFixed(1)
+      : '0',
+  };
+}
+
 async function getPrice(address) {
+  _getPriceStats.totalCalls++;
   // 1. 优先用 WS 缓存（最新，10秒有效）
   const wsCached = priceStream.getCachedPrice(address);
-  if (wsCached !== null) return wsCached;
+  if (wsCached !== null) {
+    _getPriceStats.hitWsCache++;
+    return wsCached;
+  }
 
   // 2. HTTP 本地缓存（60秒，防止低流动性币每秒发请求）
   const httpCached = _priceHttpCache.get(address);
   if (httpCached && Date.now() - httpCached.ts < PRICE_HTTP_CACHE_MS) {
+    _getPriceStats.hitHttpCache++;
     return httpCached.price;
   }
 
   // ★ V5-13: 失败抑制 —— 最近失败过的直接返回 null，不发 HTTP
   const failed = _priceFailCache.get(address);
   if (failed && Date.now() - failed.ts < failed.ttl) {
+    _getPriceStats.hitFailCache++;
     return null;
   }
 
   // 3. 真实 HTTP 请求
+  _getPriceStats.realHttpCall++;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
@@ -315,25 +410,30 @@ async function getPrice(address) {
     });
     if (!res.ok) {
       _recordFailure(address, res.status);
+      _getPriceStats.realHttpFail++;
       return null;
     }
     const json = await res.json();
     if (!json.success || !json.data) {
       _recordFailure(address, 200); // HTTP 200 但业务失败也算一次
+      _getPriceStats.realHttpFail++;
       return null;
     }
     const price = json.data.value;
     if (!Number.isFinite(price) || price <= 0) {
       _recordFailure(address, 200);
+      _getPriceStats.realHttpFail++;
       return null;
     }
     _priceHttpCache.set(address, { price, ts: Date.now() });
+    _getPriceStats.realHttpSuccess++;
     // 成功后清除失败记录
     if (_priceFailCache.has(address)) _priceFailCache.delete(address);
     return price;
   } catch (err) {
     // 超时 / 网络错误
     _recordFailure(address, err.name === 'AbortError' ? 'TIMEOUT' : 'NET_ERR');
+    _getPriceStats.realHttpFail++;
     return null;
   } finally {
     clearTimeout(timeout);
@@ -371,10 +471,10 @@ async function getSymbol(address) {
 // ★ V5-16: 实时 OHLCV 刷新 —— 给 RSI 计算用，每 N 秒拉一次最新 K 线
 //   带 TTL 缓存，避免频繁请求；命中缓存直接返回，不发 HTTP。
 const _ohlcvCache = new Map(); // address+interval → { candles, ts }
-// ★ V5-25: 默认从 30s 拉长到 900s (15分钟), 对齐 K 线宽度, 大幅节省 CU
-//   OHLCV 端点 40 CU/次, 73币×30s = 8.4M CU/天; 改 900s 后 = 0.28M CU/天
+// ★ V5-25: 默认从 30s 拉长到 300s (5分钟), 对齐 K 线宽度, 大幅节省 CU
+//   OHLCV 端点 40 CU/次, 73币×30s = 8.4M CU/天; 改 300s 后 = 0.84M CU/天
 //   实时价格走 Birdeye WS SUBSCRIBE_PRICE (priceStream), 不影响信号时效
-const OHLCV_REFRESH_SEC = parseInt(process.env.OHLCV_REFRESH_SEC || '900', 10);
+const OHLCV_REFRESH_SEC = parseInt(process.env.OHLCV_REFRESH_SEC || '300', 10);
 
 async function getRecentOHLCV(address, intervalSec, bars = 50) {
   const cacheKey = `${address}_${intervalSec}_${bars}`;
@@ -625,4 +725,4 @@ async function getOHLCV(address, intervalSec, bars = 150) {
   }
 }
 
-module.exports = { getPrice, getPriceFailStatus, getFdv, getCachedFdv, getFdvFresh, getLiquidity, getV24hUSD, getOverview, getSymbol, getRecentOHLCV, getOhlcvCacheStats, getCreationInfo, clearCache, priceStream, getOHLCV };
+module.exports = { getPrice, getPriceFailStatus, getPriceStats, getFdv, getCachedFdv, getFdvFresh, getLiquidity, getV24hUSD, getOverview, getSymbol, getRecentOHLCV, getOhlcvCacheStats, getCreationInfo, clearCache, priceStream, getOHLCV };
