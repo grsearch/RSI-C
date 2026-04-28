@@ -302,6 +302,7 @@ curl http://localhost:3001/diag | jq .
 - **V5-27**: 启动日志加 CU 关键参数行; /diag 加 cuEstimate 字段 + 月度预警
 - **V5-28**: /diag 加 wsStream / getPriceStats 字段, 用于诊断 WS 推送命中率
 - **V5-29**: ★ 修 Birdeye WS chartType '1s' → '1m' (Birdeye 已不支持 1s). getCachedPrice 过期阈值 10s → 90s 覆盖 1m 推送间隔
+- **V5-30**: ★ 真正根因 — Birdeye WS 强制要求 `echo-protocol` subprotocol header, ws 库默认不发, 加 `new WebSocket(URL, 'echo-protocol')` 修复. chartType 回退 '1s' (V5-26 旧服务器一直在用), 缓存 90s 保留
 
 ---
 

@@ -90,7 +90,7 @@ class BirdeyePriceStream {
 
   getCachedPrice(address) {
     const sub = this._subscriptions.get(address);
-    // ★ V5-29: chartType=1m, 推送间隔 1 分钟左右, 缓存有效期改为 90s (覆盖 1.5 个推送周期)
+    // ★ V5-30: 缓存有效期 90s (覆盖 Birdeye 1s WS 偶尔间隔的几十秒推送空档)
     if (!sub || !sub.price || Date.now() - sub.ts > 90000) return null;
     return sub.price;
   }
@@ -148,7 +148,10 @@ class BirdeyePriceStream {
     const safeUrl = WS_URL.replace(/x-api-key=[^&]+/, 'x-api-key=***');
     logger.info('[BirdeyeWS] 连接 %s ...', safeUrl);
 
-    this._ws = new WebSocket(WS_URL);
+    // ★ V5-30: Birdeye WS 要求 Sec-WebSocket-Protocol: echo-protocol
+    //   官方文档明确要求, 否则 SUBSCRIBE_PRICE 返回 "Invalid protocol, statusCode: 400"
+    //   ws 库的第二个参数 (string|string[]) 就是 subprotocol
+    this._ws = new WebSocket(WS_URL, 'echo-protocol');
 
     this._ws.on('open', () => {
       logger.info('[BirdeyeWS] ✅ WebSocket 已连接');
@@ -187,11 +190,11 @@ class BirdeyePriceStream {
 
   _sendSubscribe(address) {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
-    // ★ V5-29: chartType 改为 '1m' (Birdeye 文档规定的 supported interval)
-    //   '1s' 已不被支持, 服务端返回 "Invalid protocol, statusCode: 400"
+    // ★ V5-30: 真正根因是 WS 缺 echo-protocol subprotocol (见 _connect)
+    //   chartType 用 '1s' (V5-26 旧服务器一直在用), 推送更频繁, getCachedPrice 命中率高
     this._ws.send(JSON.stringify({
       type: 'SUBSCRIBE_PRICE',
-      data: { queryType: 'simple', chartType: '1m', address, currency: 'usd' },
+      data: { queryType: 'simple', chartType: '1s', address, currency: 'usd' },
     }));
     logger.debug('[BirdeyeWS] 📡 SUBSCRIBE_PRICE %s', address.slice(0, 8) + '...');
   }
@@ -200,7 +203,7 @@ class BirdeyePriceStream {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
     this._ws.send(JSON.stringify({
       type: 'UNSUBSCRIBE_PRICE',
-      data: { queryType: 'simple', chartType: '1m', address, currency: 'usd' },
+      data: { queryType: 'simple', chartType: '1s', address, currency: 'usd' },
     }));
   }
 
