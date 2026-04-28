@@ -175,6 +175,25 @@ class TokenMonitor extends EventEmitter {
     logger.info('[Monitor]   FDV退出<$%d  LP退出<$%d  最大监控=%d  巡检=%ds',
       FDV_EXIT, LP_EXIT, MAX_TOKENS, OVERVIEW_PATROL_SEC);
 
+    // ★ V5-27: CU 关键参数日志 - 部署后扫一眼就能发现 .env 覆盖问题
+    //   读 process.env, 真实反映当前生效的值 (而不是代码 fallback)
+    const ohlcvRefresh    = parseInt(process.env.OHLCV_REFRESH_SEC || '300', 10);
+    const ohlcvBars       = parseInt(process.env.OHLCV_REALTIME_BARS || '120', 10);
+    const ohlcvEnabled    = (process.env.OHLCV_REALTIME_ENABLED || 'true') === 'true';
+    const tokenCount      = MAX_TOKENS;
+    // 估算每日 CU (按代币数满载, 不含 token_creation_info / token_security 一次性)
+    const cuOhlcvDay      = ohlcvEnabled ? Math.round(tokenCount * 86400 / ohlcvRefresh * 40) : 0;
+    const cuOverviewDay   = Math.round(tokenCount * 86400 / OVERVIEW_PATROL_SEC * 25);
+    const cuMonth         = Math.round((cuOhlcvDay + cuOverviewDay) * 30 / 1e6);
+    logger.info('[Monitor] ★ CU关键参数: OHLCV_REFRESH=%ds OHLCV_BARS=%d OHLCV_ENABLED=%s OVERVIEW_PATROL=%ds',
+      ohlcvRefresh, ohlcvBars, ohlcvEnabled, OVERVIEW_PATROL_SEC);
+    logger.info('[Monitor] ★ 估算月度 CU: ~%dM (OHLCV %.1fM/天 + Overview %.1fK/天) | 配额一般 20M',
+      cuMonth, cuOhlcvDay / 1e6, cuOverviewDay / 1e3);
+    if (cuMonth > 20) {
+      logger.warn('[Monitor] ⚠️  月度 CU 估算 %dM 超过 20M 配额! 建议加大 OHLCV_REFRESH_SEC (当前 %ds)',
+        cuMonth, ohlcvRefresh);
+    }
+
     // ★ V5-18: X mentions 24h 计数定时刷新（默认 2 小时一轮）
     xMentions.start(() => Array.from(this._tokens.keys()));
   }

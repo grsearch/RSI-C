@@ -299,6 +299,7 @@ curl http://localhost:3001/diag | jq .
 - **V5-24**: dashboard 表格创建 td 数量从 15 改 16, 修整张表空白; 加 birdeye.getCreationInfo 和持久化
 - **V5-25**: ★ OHLCV 刷新从 30s 改 300s, 节省 90% Birdeye CU. 实时价由 Birdeye WS SUBSCRIBE_PRICE 提供, 业务行为不变
 - **V5-26**: 重新启用固定止损 -20% 和量能萎缩出场; VOL_DECAY 参数 (3根<前4根均×0.3, 严重萎缩才触发)
+- **V5-27**: 启动日志加 CU 关键参数行; /diag 加 cuEstimate 字段 + 月度预警
 
 ---
 
