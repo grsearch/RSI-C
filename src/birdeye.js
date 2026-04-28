@@ -90,7 +90,8 @@ class BirdeyePriceStream {
 
   getCachedPrice(address) {
     const sub = this._subscriptions.get(address);
-    if (!sub || !sub.price || Date.now() - sub.ts > 10000) return null;
+    // ★ V5-29: chartType=1m, 推送间隔 1 分钟左右, 缓存有效期改为 90s (覆盖 1.5 个推送周期)
+    if (!sub || !sub.price || Date.now() - sub.ts > 90000) return null;
     return sub.price;
   }
 
@@ -186,9 +187,11 @@ class BirdeyePriceStream {
 
   _sendSubscribe(address) {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+    // ★ V5-29: chartType 改为 '1m' (Birdeye 文档规定的 supported interval)
+    //   '1s' 已不被支持, 服务端返回 "Invalid protocol, statusCode: 400"
     this._ws.send(JSON.stringify({
       type: 'SUBSCRIBE_PRICE',
-      data: { queryType: 'simple', chartType: '1s', address, currency: 'usd' },
+      data: { queryType: 'simple', chartType: '1m', address, currency: 'usd' },
     }));
     logger.debug('[BirdeyeWS] 📡 SUBSCRIBE_PRICE %s', address.slice(0, 8) + '...');
   }
@@ -197,7 +200,7 @@ class BirdeyePriceStream {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
     this._ws.send(JSON.stringify({
       type: 'UNSUBSCRIBE_PRICE',
-      data: { queryType: 'simple', chartType: '1s', address, currency: 'usd' },
+      data: { queryType: 'simple', chartType: '1m', address, currency: 'usd' },
     }));
   }
 

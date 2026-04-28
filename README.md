@@ -300,6 +300,8 @@ curl http://localhost:3001/diag | jq .
 - **V5-25**: ★ OHLCV 刷新从 30s 改 300s, 节省 90% Birdeye CU. 实时价由 Birdeye WS SUBSCRIBE_PRICE 提供, 业务行为不变
 - **V5-26**: 重新启用固定止损 -20% 和量能萎缩出场; VOL_DECAY 参数 (3根<前4根均×0.3, 严重萎缩才触发)
 - **V5-27**: 启动日志加 CU 关键参数行; /diag 加 cuEstimate 字段 + 月度预警
+- **V5-28**: /diag 加 wsStream / getPriceStats 字段, 用于诊断 WS 推送命中率
+- **V5-29**: ★ 修 Birdeye WS chartType '1s' → '1m' (Birdeye 已不支持 1s). getCachedPrice 过期阈值 10s → 90s 覆盖 1m 推送间隔
 
 ---
 
