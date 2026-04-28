@@ -371,10 +371,10 @@ async function getSymbol(address) {
 // ★ V5-16: 实时 OHLCV 刷新 —— 给 RSI 计算用，每 N 秒拉一次最新 K 线
 //   带 TTL 缓存，避免频繁请求；命中缓存直接返回，不发 HTTP。
 const _ohlcvCache = new Map(); // address+interval → { candles, ts }
-// ★ V5-25: 默认从 30s 拉长到 300s (5分钟), 对齐 K 线宽度, 大幅节省 CU
-//   OHLCV 端点 40 CU/次, 73币×30s = 8.4M CU/天; 改 300s 后 = 0.84M CU/天
+// ★ V5-25: 默认从 30s 拉长到 900s (15分钟), 对齐 K 线宽度, 大幅节省 CU
+//   OHLCV 端点 40 CU/次, 73币×30s = 8.4M CU/天; 改 900s 后 = 0.28M CU/天
 //   实时价格走 Birdeye WS SUBSCRIBE_PRICE (priceStream), 不影响信号时效
-const OHLCV_REFRESH_SEC = parseInt(process.env.OHLCV_REFRESH_SEC || '300', 10);
+const OHLCV_REFRESH_SEC = parseInt(process.env.OHLCV_REFRESH_SEC || '900', 10);
 
 async function getRecentOHLCV(address, intervalSec, bars = 50) {
   const cacheKey = `${address}_${intervalSec}_${bars}`;
